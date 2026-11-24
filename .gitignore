@@ -1,0 +1,25 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local data (real Chandrayaan products are large - never commit them)
+data/
+*.img
+*.IMG
+*.tif
+*.tiff
+
+# Model checkpoints: only the shipped model is tracked
+models/*.pt
+!models/crater_unet.pt
+
+# Runtime / secrets
+.env
+*.log
+.DS_Store
+Thumbs.db
