@@ -154,7 +154,7 @@ image ──► contrast stretch ──► U-Net (tiles + pyramid) ──► rim
    variance), which makes the detector robust to exposure differences.
 2. **U-Net** (`lunarcrater/model.py`). An encoder-decoder with skip connections (4 levels, 16→256 channels, 1.94 M
    parameters) predicts the probability that each pixel lies on a crater rim. Loss = weighted binary cross-entropy +
-   Dice. Large images are processed in overlapping tiles blended with a Hann window, and at ½ and ¼ scale so that
+   Dice. Large images are processed in overlapping tiles blended with a Hann window, and at ½, ¼ (and, for very large images, ⅛) scale so that
    craters bigger than the network's training range are still found.
 3. **Ring extraction** (`lunarcrater/extract.py`). Ring templates for radii from 3 to 40 px (in 7 % steps) are
    matched against the probability map with normalised cross-correlation. Local maxima become candidates, and
@@ -165,7 +165,8 @@ image ──► contrast stretch ──► U-Net (tiles + pyramid) ──► rim
 5. **Landing screening.** Every crater, enlarged by 25 % for its rim and ejecta, and the image border (unknown
    terrain) are treated as hazards. A distance transform gives each pixel its clearance in metres. The score
    combines clearance with the local roughness percentile, and the top non-overlapping maxima become the candidate
-   sites.
+   sites. Sites are never proposed within one footprint (at least 8 px) of the image edge, because the terrain
+   beyond the frame is unknown.
 
 ### Training data
 
@@ -262,7 +263,9 @@ curl -F file=@tile.png -F meters_per_pixel=5 http://localhost:8000/api/detect
 python -m pytest
 ```
 
-The suite has 44 tests. They cover the simulator, a one-epoch training and fine-tuning run, ring extraction, the matching metrics, the image loaders
+The same suite runs automatically on GitHub Actions for every push (`.github/workflows/tests.yml`).
+
+The suite has 45 tests. They cover the simulator, a one-epoch training and fine-tuning run, ring extraction, the matching metrics, the image loaders
 (including PDS4), the analysis maths, the detector (an untrained model for shape and tiling checks, plus a
 regression check that the shipped weights reach F1 > 0.5 on held-out scenes), every API endpoint and its error
 cases, the CLI, and the tiling script.

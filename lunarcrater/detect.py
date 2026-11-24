@@ -2,7 +2,8 @@
 
 * ``unet``  - the trained CraterUNet predicts a rim-probability map (tiled with overlap),
   rings are extracted by template matching.  Large images are processed as an image
-  pyramid (full, 1/2, 1/4 resolution) so that big craters still fit the network's
+  pyramid (full, 1/2, 1/4 and, for very large images, 1/8 resolution; a level is used only
+  while its shorter side stays >= 128 px) so that big craters still fit the network's
   receptive field; results from all levels are merged with non-maximum suppression.
 * ``hough`` - classical baseline (no model needed).
 """

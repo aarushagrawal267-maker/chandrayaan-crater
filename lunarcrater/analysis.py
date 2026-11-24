@@ -108,6 +108,13 @@ def landing_safety(
     score = clear_score * (1.0 - 0.4 * rough_rank)
     score[clearance_m < need] = np.minimum(score[clearance_m < need], 0.2 * clear_score[clearance_m < need])
     safe_fraction = float((clearance_m >= need).mean())
+    # Do not propose sites right at the frame edge: the terrain just outside the image is unknown
+    # and the roughness window would be cut off there. Keep a band of one footprint (>= 8 px).
+    band = min(max(int(np.ceil(footprint_m / mpp)), 8), max(1, min(h, w) // 4))
+    edge = np.zeros((h, w), bool)
+    edge[:band, :] = edge[-band:, :] = True
+    edge[:, :band] = edge[:, -band:] = True
+    score[edge] = np.minimum(score[edge], 0.2 * clear_score[edge])
 
     sites = []
     work = score.copy()

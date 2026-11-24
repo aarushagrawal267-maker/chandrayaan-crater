@@ -40,3 +40,11 @@ def test_landing_sites_avoid_craters():
 def test_analyse_empty():
     out = analyse(np.zeros((64, 64), np.uint8), [], mpp=5.0)
     assert out["stats"]["count"] == 0 and out["stats"]["diameter_median_m"] is None
+
+
+def test_landing_sites_not_on_frame_edge():
+    img = np.full((256, 256), 120, np.uint8)
+    res = landing_safety(img, [{"x": 128, "y": 128, "r": 60}], mpp=5.0, footprint_m=10)
+    assert res["sites"]
+    for s in res["sites"]:
+        assert 8 <= s["x_px"] < 248 and 8 <= s["y_px"] < 248
