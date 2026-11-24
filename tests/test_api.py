@@ -1,0 +1,78 @@
+import cv2
+import numpy as np
+import pytest
+from fastapi.testclient import TestClient
+
+from app.main import app
+from lunarcrater.synthetic import generate_scene
+
+client = TestClient(app)
+
+
+def png_bytes(img):
+    ok, buf = cv2.imencode(".png", img)
+    return buf.tobytes()
+
+
+def test_health_and_index():
+    r = client.get("/api/health")
+    assert r.status_code == 200 and r.json()["status"] == "ok"
+    assert "Chandrayaan Crater Lens" in client.get("/").text
+    assert client.get("/static/app.js").status_code == 200
+
+
+def test_samples_listed_and_served():
+    samples = client.get("/api/samples").json()
+    assert len(samples) >= 3
+    assert "ground_truth" not in samples[0]
+    r = client.get(f"/api/samples/{samples[0]['file']}")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+    assert client.get("/api/samples/../../etc/passwd").status_code == 404
+
+
+def test_detect_sample_hough():
+    name = client.get("/api/samples").json()[-1]["file"]
+    r = client.post("/api/detect", data={"sample": name, "method": "hough", "meters_per_pixel": "0.25"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["stats"]["count"] == len(d["catalogue"])
+    assert d["ground_truth"]["count"] > 0 and "f1" in d["ground_truth"]["scores"]
+    assert d["image_png"] and d["landing"]["overlay_png"]
+
+
+def test_detect_upload_unet():
+    if not client.get("/api/health").json()["model_available"]:
+        pytest.skip("no trained model")
+    img = generate_scene(256, seed=99).image
+    r = client.post("/api/detect", files={"file": ("moon.png", png_bytes(img), "image/png")}, data={"meters_per_pixel": "5"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["method"] == "unet" and d["stats"]["count"] > 0 and "ground_truth" not in d
+    assert d["stats"]["meters_per_pixel"] == 5.0
+
+
+def test_large_upload_is_downscaled():
+    img = np.resize(generate_scene(256, seed=1).image, (2200, 600))
+    r = client.post("/api/detect", files={"file": ("big.png", png_bytes(np.ascontiguousarray(img)), "image/png")}, data={"meters_per_pixel": "1", "method": "hough"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["downscale_factor"] < 1 and d["effective_meters_per_pixel"] > 1
+
+
+@pytest.mark.parametrize(
+    "kwargs,code",
+    [
+        ({"data": {}}, 422),
+        ({"data": {"sample": "nope.png"}}, 404),
+        ({"files": {"file": ("x.png", b"garbage", "image/png")}}, 422),
+        ({"data": {"sample": "x", "method": "magic"}}, 422),
+        ({"data": {"sample": "x", "meters_per_pixel": "-1"}}, 422),
+    ],
+)
+def test_detect_errors(kwargs, code):
+    assert client.post("/api/detect", **kwargs).status_code == code
+
+
+def test_model_endpoint():
+    d = client.get("/api/model").json()
+    assert "model_available" in d and "evaluation" in d
