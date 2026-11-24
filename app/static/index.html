@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chandrayaan Crater Lens</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23c9c2b4'/%3E%3Ccircle cx='11' cy='12' r='4' fill='%23948b7a'/%3E%3Ccircle cx='20' cy='20' r='5' fill='%23948b7a'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="#c9c2b4"/><circle cx="11" cy="12" r="4" fill="#948b7a"/><circle cx="20" cy="20" r="5" fill="#948b7a"/><circle cx="21" cy="9" r="2" fill="#948b7a"/></svg>
+    <div>
+      <h1>Chandrayaan Crater Lens</h1>
+      <p>Lunar crater detection &amp; landing-site screening</p>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="analyse" role="tab">Analyse</button>
+    <button class="tab" data-tab="model" role="tab">Model &amp; evaluation</button>
+    <button class="tab" data-tab="about" role="tab">How it works</button>
+  </nav>
+  <span id="status" class="pill">checking...</span>
+</header>
+
+<main>
+  <!-- ============================== ANALYSE ============================== -->
+  <section id="tab-analyse" class="tabpanel active">
+    <aside class="panel controls">
+      <h2>1. Choose an image</h2>
+      <div id="samples" class="samples"></div>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept=".png,.jpg,.jpeg,.tif,.tiff,image/*">
+        <span id="drop-text"><strong>Upload your own</strong><br>PNG, JPG or TIFF (8/16-bit), max 40 MB</span>
+      </label>
+
+      <h2>2. Settings</h2>
+      <label class="field">Detector
+        <select id="method">
+          <option value="unet">U-Net (deep learning)</option>
+          <option value="hough">Hough transform (classical baseline)</option>
+        </select>
+      </label>
+      <label class="field">Resolution (metres / pixel)
+        <div class="row">
+          <input type="number" id="mpp" value="5" min="0.01" step="0.01">
+          <button class="chip" data-mpp="5" type="button">TMC-2 5 m</button>
+          <button class="chip" data-mpp="0.25" type="button">OHRC 0.25 m</button>
+        </div>
+      </label>
+      <label class="field">Minimum rim confidence <output id="conf-out">0.60</output>
+        <input type="range" id="conf" min="0.1" max="0.9" step="0.05" value="0.6">
+      </label>
+      <label class="field">Lander footprint (metres)
+        <input type="number" id="footprint" value="10" min="0.1" step="0.5">
+      </label>
+      <button id="run" class="primary" disabled>Detect craters</button>
+      <p id="msg" class="msg" role="status"></p>
+    </aside>
+
+    <div class="workspace">
+      <div class="panel viewer-wrap">
+        <div class="viewer-head">
+          <div class="layers">
+            <label><input type="checkbox" id="show-craters" checked> Detected craters</label>
+            <label><input type="checkbox" id="show-gt"> Ground truth</label>
+            <label><input type="checkbox" id="show-safety"> Landing safety map</label>
+            <label><input type="checkbox" id="show-sites" checked> Candidate sites</label>
+          </div>
+          <div class="downloads">
+            <button id="dl-csv" class="ghost" disabled>CSV</button>
+            <button id="dl-json" class="ghost" disabled>JSON</button>
+            <button id="dl-png" class="ghost" disabled>PNG</button>
+          </div>
+        </div>
+        <div class="viewer" id="viewer">
+          <canvas id="canvas" width="512" height="512"></canvas>
+          <div id="tooltip" class="tooltip" hidden></div>
+          <div id="empty" class="empty">Pick a sample image or upload a Chandrayaan-2 TMC-2 / OHRC image to begin.</div>
+        </div>
+        <p class="legend"><span class="sw sw-det"></span>detected <span class="sw sw-gt"></span>ground truth (samples only) <span class="sw sw-site"></span>candidate landing site <span class="grad"></span>hazard &rarr; safe</p>
+      </div>
+
+      <div id="results" class="results" hidden>
+        <div class="cards" id="cards"></div>
+        <div class="grid2">
+          <div class="panel">
+            <h3>Size-frequency distribution</h3>
+            <p class="hint">Cumulative number of craters wider than D per km&sup2; (log-log). The dashed line is the power-law fit above the completeness diameter.</p>
+            <div id="sfd"></div>
+          </div>
+          <div class="panel">
+            <h3>Landing-site screening</h3>
+            <p class="hint">Educational: distance to the nearest detected crater plus an image-roughness proxy. A single image has no elevation data.</p>
+            <div id="sites"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Crater catalogue <span id="cat-count" class="muted"></span></h3>
+          <div class="table-wrap"><table id="table"><thead><tr><th>#</th><th>x (px)</th><th>y (px)</th><th>Diameter (m)</th><th>Confidence</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== MODEL ============================== -->
+  <section id="tab-model" class="tabpanel">
+    <div class="panel">
+      <h2>Held-out evaluation</h2>
+      <p class="hint" id="eval-desc">Loading...</p>
+      <div class="table-wrap"><table id="eval-table"></table></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h3>Recall by crater size</h3><div id="recall-chart"></div></div>
+      <div class="panel"><h3>Training curve</h3><div id="train-chart"></div></div>
+    </div>
+  </section>
+
+  <!-- ============================== ABOUT ============================== -->
+  <section id="tab-about" class="tabpanel">
+    <div class="panel prose">
+      <h2>How it works</h2>
+      <ol class="steps">
+        <li><strong>Image in.</strong> Any single-band orbital image: PNG/JPG/TIFF in the browser, or a Chandrayaan-2 PDS4 product via the command line (<code>scripts/prepare_chandrayaan.py</code>). 16-bit data is contrast-stretched; very large images are downscaled to 2048 px and the resolution is corrected automatically.</li>
+        <li><strong>U-Net.</strong> A 1.9 M-parameter U-Net predicts, for every pixel, the probability that it lies on a crater rim. Big images are processed in overlapping 256 px tiles and as an image pyramid so large craters are also found.</li>
+        <li><strong>Ring extraction.</strong> Ring templates of many radii are matched against the probability map; the best non-overlapping matches become craters (centre, radius, confidence).</li>
+        <li><strong>Science.</strong> Diameters are converted to metres, then the app computes crater density, the area covered by craters and the cumulative size-frequency distribution with a power-law slope fit.</li>
+        <li><strong>Landing screening.</strong> Every pixel gets a score from its distance to the nearest crater hazard and local roughness; the best separated spots that fit the lander footprint are proposed.</li>
+      </ol>
+      <h3>Training data</h3>
+      <p>Labelled Chandrayaan-2 crater masks are not openly available, so the network is trained on procedurally simulated lunar terrain: fractal regolith, power-law crater populations with fresh/degraded bowl profiles (depth &asymp; 0.2 D), and Lambertian shading under a random low sun. Ground truth is therefore exact, and the test scenes use seeds never seen in training.</p>
+      <h3>Limitations</h3>
+      <ul>
+        <li>Accuracy numbers come from simulated test scenes. Performance on real TMC-2/OHRC images has not been measured against an expert catalogue.</li>
+        <li>Craters smaller than about 6 px across (r &lt; 3 px) are not detected; very large craters need the image to be at least 2-4&times; their diameter.</li>
+        <li>The landing map is a teaching aid, not a mission tool: real site selection uses DEMs, slope maps and boulder counts.</li>
+        <li>Not affiliated with or endorsed by ISRO.</li>
+      </ul>
+      <h3>Get real Chandrayaan-2 data</h3>
+      <p>Register at the ISRO Science Data Archive (<a href="https://pradan.issdc.gov.in" target="_blank" rel="noopener">PRADAN</a>), download a TMC-2 or OHRC calibrated product, then run <code>python scripts/prepare_chandrayaan.py path/to/product.xml</code> to make browser-sized PNG tiles.</p>
+    </div>
+  </section>
+</main>
+<footer>Chandrayaan Crater Lens &middot; open-source student project &middot; MIT licence</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>
