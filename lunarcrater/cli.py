@@ -76,7 +76,9 @@ def main(argv: list[str] | None = None) -> int:
     e = sub.add_parser("evaluate", help="evaluate detectors on held-out synthetic scenes")
     e.add_argument("--images", type=int, default=100)
     e.add_argument("--model", default=None)
-    e.add_argument("--out", default=str(ROOT / "models" / "metrics.json"))
+    e.add_argument("--split", choices=["test", "val"], default="test", help="val = validation seeds, for choosing thresholds")
+    e.add_argument("--min-confidence", type=float, default=0.6)
+    e.add_argument("--out", default=None, help="default: models/metrics.json (test) or models/metrics_val.json (val)")
 
     d = sub.add_parser("detect", help="detect craters in an image (PNG/JPG/TIFF or PDS4 .xml label)")
     d.add_argument("image")
@@ -106,9 +108,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "evaluate":
         from .evaluate import evaluate, write_report
 
-        rep = evaluate(n_images=args.images, detector=CraterDetector(args.model))
-        write_report(rep, args.out)
-        print(f"report written to {args.out}")
+        out = args.out or str(ROOT / "models" / ("metrics.json" if args.split == "test" else "metrics_val.json"))
+        rep = evaluate(n_images=args.images, detector=CraterDetector(args.model), split=args.split, min_confidence=args.min_confidence)
+        write_report(rep, out)
+        print(f"report written to {out}")
         return 0
 
     if args.cmd == "detect":

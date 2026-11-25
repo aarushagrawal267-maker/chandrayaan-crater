@@ -264,11 +264,11 @@ async function loadModel() {
     if (!ev) { $("#eval-desc").textContent = "No evaluation report yet. Run: python -m lunarcrater evaluate"; }
     else {
       const t = ev.test_set;
-      $("#eval-desc").textContent = `${t.images} held-out simulated scenes (${t.image_size_px} px, ${t.ground_truth_craters} ground-truth craters with radius >= ${t.min_radius_px} px). Match rule: ${t.match_rule}.`;
+      $("#eval-desc").textContent = `${t.images} held-out simulated scenes (${t.image_size_px} px, ${t.ground_truth_craters} ground-truth craters with radius >= ${t.min_radius_px} px). Match rule: ${t.match_rule}.${t.ci95 ? " 95% confidence intervals: " + t.ci95 + " (scatter between simulated scenes only)." : ""}`;
       const names = { unet: "U-Net + ring matching", hough: "Hough transform baseline" };
       const rows = Object.entries(ev.methods);
       $("#eval-table").innerHTML = "<thead><tr><th>Method</th><th>Precision</th><th>Recall</th><th>F1</th><th>TP / FP / FN</th><th>Centre error</th><th>Radius error</th><th>Time / image</th></tr></thead><tbody>" +
-        rows.map(([k, m]) => `<tr><td>${names[k] || k}</td><td>${fmt(m.precision, 3)}</td><td>${fmt(m.recall, 3)}</td><td><strong>${fmt(m.f1, 3)}</strong></td><td>${m.tp} / ${m.fp} / ${m.fn}</td><td>${m.mean_frac_err_xy === null ? "-" : fmt(m.mean_frac_err_xy * 100, 1) + "% of r"}</td><td>${m.mean_frac_err_r === null ? "-" : fmt(m.mean_frac_err_r * 100, 1) + "%"}</td><td>${fmt(m.mean_inference_ms, 0)} ms</td></tr>`).join("") + "</tbody>";
+        rows.map(([k, m]) => `<tr><td>${names[k] || k}</td><td>${fmt(m.precision, 3)}</td><td>${fmt(m.recall, 3)}</td><td><strong>${fmt(m.f1, 3)}</strong>${m.ci95 ? `<br><span class="muted">95% CI ${fmt(m.ci95.f1[0], 3)}-${fmt(m.ci95.f1[1], 3)}</span>` : ""}</td><td>${m.tp} / ${m.fp} / ${m.fn}</td><td>${m.mean_frac_err_xy === null ? "-" : fmt(m.mean_frac_err_xy * 100, 1) + "% of r"}</td><td>${m.mean_frac_err_r === null ? "-" : fmt(m.mean_frac_err_r * 100, 1) + "%"}</td><td>${fmt(m.mean_inference_ms, 0)} ms</td></tr>`).join("") + "</tbody>";
       renderRecall(rows);
     }
     renderTraining(d.training_history);

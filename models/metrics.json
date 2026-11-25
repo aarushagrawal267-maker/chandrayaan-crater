@@ -1,5 +1,6 @@
 {
   "test_set": {
+    "split": "test",
     "images": 100,
     "image_size_px": 256,
     "seed_range": [
@@ -8,7 +9,9 @@
     ],
     "ground_truth_craters": 2491,
     "min_radius_px": 3.0,
-    "match_rule": "centre within 0.5 r_gt and |dr| <= 0.35 r_gt, one-to-one"
+    "match_rule": "centre within 0.5 r_gt and |dr| <= 0.35 r_gt, one-to-one",
+    "min_confidence": 0.6,
+    "ci95": "percentile bootstrap over images, 2000 resamples, seed 0"
   },
   "methods": {
     "unet": {
@@ -19,8 +22,22 @@
       "precision": 0.8594,
       "recall": 0.8442,
       "f1": 0.8518,
-      "mean_frac_err_xy": 0.1078,
-      "mean_frac_err_r": 0.0647,
+      "mean_frac_err_xy": 0.1075,
+      "mean_frac_err_r": 0.0644,
+      "ci95": {
+        "precision": [
+          0.8351,
+          0.8839
+        ],
+        "recall": [
+          0.8214,
+          0.8676
+        ],
+        "f1": [
+          0.8314,
+          0.8712
+        ]
+      },
       "recall_by_size": {
         "small (3-8 px)": 0.8339,
         "medium (8-20 px)": 0.8947,
@@ -36,8 +53,22 @@
       "precision": 0.1949,
       "recall": 0.0743,
       "f1": 0.1076,
-      "mean_frac_err_xy": 0.1928,
-      "mean_frac_err_r": 0.1034,
+      "mean_frac_err_xy": 0.182,
+      "mean_frac_err_r": 0.1002,
+      "ci95": {
+        "precision": [
+          0.164,
+          0.2288
+        ],
+        "recall": [
+          0.0623,
+          0.0863
+        ],
+        "f1": [
+          0.0908,
+          0.124
+        ]
+      },
       "recall_by_size": {
         "small (3-8 px)": 0.0075,
         "medium (8-20 px)": 0.4408,

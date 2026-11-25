@@ -51,3 +51,29 @@ def test_pixel_scores():
     m = np.zeros((10, 10), np.uint8)
     m[2:5, 2:5] = 1
     assert pixel_scores(m.astype(float), m)["iou"] == 1.0
+
+
+def test_summarize_pools_errors_over_matched_craters():
+    # 1 match with 40 % error and 9 matches with 10 %: the crater-level mean is 13 %, not (40 + 10) / 2.
+    s = summarize(
+        [
+            {"tp": 1, "fp": 0, "fn": 0, "frac_err_xy": 0.4, "frac_err_r": 0.2},
+            {"tp": 9, "fp": 0, "fn": 0, "frac_err_xy": 0.1, "frac_err_r": 0.0},
+            {"tp": 0, "fp": 3, "fn": 1, "frac_err_xy": None, "frac_err_r": None},
+        ]
+    )
+    assert s["mean_frac_err_xy"] == 0.13 and s["mean_frac_err_r"] == 0.02
+
+
+def test_evaluate_val_split_and_confidence_intervals():
+    from lunarcrater.evaluate import bootstrap_ci, evaluate
+    from lunarcrater.train import VAL_SEED0
+
+    rep = evaluate(n_images=3, methods=("hough",), split="val", log=lambda *_: None)
+    assert rep["test_set"]["split"] == "val" and rep["test_set"]["seed_range"] == [VAL_SEED0, VAL_SEED0 + 2]
+    m = rep["methods"]["hough"]
+    for k in ("precision", "recall", "f1"):
+        lo, hi = m["ci95"][k]
+        assert 0.0 <= lo <= hi <= 1.0
+    ci = bootstrap_ci([{"tp": 5, "fp": 0, "fn": 0}] * 4)
+    assert ci["precision"] == [1.0, 1.0] and ci["f1"] == [1.0, 1.0]

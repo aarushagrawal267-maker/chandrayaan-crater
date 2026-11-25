@@ -60,8 +60,11 @@ def summarize(results: list[dict]) -> dict:
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    exy = [r["frac_err_xy"] for r in results if r["frac_err_xy"] is not None]
-    er = [r["frac_err_r"] for r in results if r["frac_err_r"] is not None]
+    # Localisation errors are averaged over all matched craters (each image's mean is
+    # weighted by its number of matches), not as a mean of per-image means.
+    matched = [r for r in results if r["tp"] and r["frac_err_xy"] is not None]
+    exy = sum(r["frac_err_xy"] * r["tp"] for r in matched) / tp if matched else None
+    er = sum(r["frac_err_r"] * r["tp"] for r in matched) / tp if matched else None
     return {
         "images": len(results),
         "tp": tp,
@@ -70,8 +73,8 @@ def summarize(results: list[dict]) -> dict:
         "precision": round(precision, 4),
         "recall": round(recall, 4),
         "f1": round(f1, 4),
-        "mean_frac_err_xy": round(float(np.mean(exy)), 4) if exy else None,
-        "mean_frac_err_r": round(float(np.mean(er)), 4) if er else None,
+        "mean_frac_err_xy": round(float(exy), 4) if exy is not None else None,
+        "mean_frac_err_r": round(float(er), 4) if er is not None else None,
     }
 
 

@@ -191,21 +191,51 @@ Training, validation and test scenes come from disjoint seed ranges, so the test
 
 Measured with `python -m lunarcrater evaluate` on **100 held-out simulated 256 × 256 scenes**
 (2,491 ground-truth craters, radius ≥ 3 px). A detection counts as correct when its centre is within 0.5 r and
-its radius within 35 % of a ground-truth crater (one-to-one matching). The full report is in
-[`models/metrics.json`](models/metrics.json).
+its radius within 35 % of a ground-truth crater (one-to-one matching). Precision, recall and F1 are pooled over all
+craters of the 100 scenes. The full report is in [`models/metrics.json`](models/metrics.json).
 
-| Method | Precision | Recall | F1 | TP / FP / FN | Centre error | Radius error | Time / 256² image* |
-|--------|-----------|--------|----|--------------|--------------|--------------|------------------|
-| **U-Net + ring matching** | **0.859** | **0.844** | **0.852** | 2103 / 344 / 388 | 10.8 % of r | 6.5 % | 476 ms |
-| Hough transform baseline | 0.195 | 0.074 | 0.108 | 185 / 764 / 2306 | 19.3 % of r | 10.3 % | 24 ms |
+| Method | Precision | Recall | F1 (95 % CI†) | TP / FP / FN | Centre error‡ | Radius error‡ | Time / 256² image* |
+|--------|-----------|--------|---------------|--------------|---------------|---------------|------------------|
+| **U-Net + ring matching** | **0.859** | **0.844** | **0.852** (0.831-0.871) | 2103 / 344 / 388 | 10.8 % of r | 6.4 % | 476 ms |
+| Hough transform baseline | 0.195 | 0.074 | 0.108 (0.091-0.124) | 185 / 764 / 2306 | 18.2 % of r | 10.0 % | 24 ms |
 
-Recall by crater size (U-Net / Hough): small 3-8 px **0.83** / 0.01 · medium 8-20 px **0.89** / 0.44 · large > 20 px **0.98** / 0.70.
+Recall by crater **radius** (U-Net / Hough): small 3-8 px **0.83** / 0.01 · medium 8-20 px **0.89** / 0.44 · large ≥ 20 px **0.98** / 0.70.
 
-\* CPU time on a shared 4-core cloud machine, so expect it to vary.
+† Percentile bootstrap over the 100 test images (2,000 resamples). It shows how much the score moves from one set of
+simulated scenes to another. It does **not** cover the gap between simulated and real images. Precision CI: U-Net
+0.835-0.884, Hough 0.164-0.229. Recall CI: U-Net 0.821-0.868, Hough 0.062-0.086. Scores also vary a lot between
+single images: the per-image U-Net F1 has a median of 0.85 but drops to 0.44 on the hardest test scene.
+
+‡ Mean over all matched craters, as a fraction of the true radius. Before 25 Nov 2026 this was a mean of per-image
+means (U-Net 10.8 % / 6.5 %, Hough 19.3 % / 10.3 %); precision, recall and F1 were not affected.
+
+\* `mean_inference_ms` in `metrics.json` is wall-clock CPU time per image, including the ½-scale pyramid level.
+It depends heavily on the machine and on what else is running. On the shared 4-core cloud machines used for this
+project the U-Net took between about 140 ms and 480 ms per image when the machine was quiet, and the Hough baseline
+about 25 ms. The stored values (U-Net 476 ms, Hough 24 ms) are from the original evaluation run. The 25 Nov 2026
+re-run reproduced every accuracy number exactly, but the machine was busy with other jobs and measured 1.7-2.0 s
+per U-Net image, so its timings were not stored. Treat the timing as an example, not a benchmark.
 
 The Hough transform fails mostly on small craters: under a low sun a crater looks like a crescent of shadow beside a
-crescent of light, not a closed circular edge. The U-Net learns that pattern. The detection thresholds (ring match
-≥ 0.5, rim confidence ≥ 0.6) were chosen on **validation** scenes, not on the test scenes.
+crescent of light, not a closed circular edge. The U-Net learns that pattern. The baseline is not a straw man: a
+re-tuning sweep of 36 Hough settings (Canny threshold, accumulator threshold, `dp`, blur) on 100 **validation**
+scenes found no setting above F1 0.106 there, and the best of them scored F1 0.124 on the test scenes, inside the
+confidence interval above. The shipped settings are kept.
+
+**Thresholds.** The U-Net detection thresholds (ring match ≥ 0.5, rim confidence ≥ 0.6) were not tuned on the test
+scenes. The original tuning run was not saved, so they were re-checked on 100 **validation** scenes (seeds
+10,000,000-10,000,099, rendered at 256 px) with `python -m lunarcrater evaluate --split val --min-confidence C`
+(ring match changed in code):
+
+| Rim confidence → / ring match ↓ | 0.5 | 0.6 (default) | 0.7 |
+|------|------|------|------|
+| 0.4 | 0.803 | 0.816 | 0.827 |
+| **0.5 (default)** | 0.831 | **0.838** | 0.843 |
+| 0.6 | 0.736 | 0.736 | 0.737 |
+
+(validation F1). Ring match 0.5 is clearly best. Rim confidence 0.7 is 0.005 higher than the default 0.6, which is
+well inside the scatter shown by the confidence interval, so 0.6 is kept because it finds more craters
+(validation recall 0.822 vs 0.813). In the app you can raise the minimum rim confidence yourself.
 
 Training (CPU only, about 1 h in total on a shared 4-core machine). **Stage 1:** AdamW with a one-cycle schedule
 (peak learning rate 2e-3, 1,600 scenes of 160 × 160 px per epoch, planned for 16 epochs). The run was stopped after
@@ -234,7 +264,7 @@ python -m lunarcrater evaluate --images 100 --model models/crater_unet_ft.pt
 ```bash
 python -m lunarcrater make-samples                     # regenerate samples/ (deterministic)
 python -m lunarcrater train [--epochs N --train-size N]
-python -m lunarcrater evaluate [--images N]
+python -m lunarcrater evaluate [--images N] [--split test|val] [--min-confidence 0.6]
 python -m lunarcrater detect IMAGE --mpp 5 [--method unet|hough] [--min-confidence 0.6]
                              [--footprint 10] [--csv out.csv] [--json out.json] [--annotated out.png]
 ```
@@ -268,7 +298,7 @@ python -m pytest
 
 The same suite runs automatically on GitHub Actions for every push (`.github/workflows/tests.yml`).
 
-The suite has 51 tests. They cover the simulator, a one-epoch training and fine-tuning run, the train/validation/test seed split, ring extraction, the matching metrics, the image loaders
+The suite has 53 tests. They cover the simulator, a one-epoch training and fine-tuning run, the train/validation/test seed split, ring extraction, the matching metrics and their bootstrap confidence intervals, the image loaders
 (including PDS4), the analysis maths, the detector (an untrained model for shape and tiling checks, plus a
 regression check that the shipped weights reach F1 > 0.5 on held-out scenes), every API endpoint and its error
 cases (including a corrupt model file, which gives a clear 503 instead of a crash), the CLI, and the tiling script.
@@ -319,6 +349,12 @@ framework, no build) · pytest.
   lacks: secondary crater chains, boulders, complex craters with central peaks, permanently shadowed regions and
   camera artefacts. Expect more false positives and misses on real data until the model is fine-tuned on labelled
   real tiles.
+* **Simulated, in-distribution test set.** The test scenes come from the same simulator as the training scenes
+  (different seeds, same physics and same image statistics). The test F1 of 0.85 therefore says how well the
+  network learned the simulator. Accuracy on real images is likely to be lower, and it has not been measured.
+  The ground truth also follows the simulator's rules: only craters with radius ≥ 3 px, a centre inside the frame
+  and enough relief to be visible are labelled, so a detection of a very faint simulated crater counts as a false
+  positive.
 * **Size range.** Craters smaller than about 6 px across (r < 3 px) are not detected. The pyramid reaches large
   craters only if the image is at least 2-4 × their diameter.
 * **Landing map.** A single image has no elevation, so roughness is a brightness-based proxy. Real landing-site
