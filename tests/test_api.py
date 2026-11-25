@@ -103,3 +103,32 @@ def test_broken_model_reported_not_500(monkeypatch, tmp_path):
         r = c.post("/api/detect", data={"sample": name, "method": "unet"})
         assert r.status_code == 503 and "could not be loaded" in r.json()["detail"]
         assert c.post("/api/detect", data={"sample": name, "method": "hough"}).status_code == 200
+
+
+def test_detections_run_one_at_a_time(monkeypatch):
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    import app.main as main_mod
+
+    state = {"now": 0, "peak": 0}
+    lock = threading.Lock()
+
+    def fake_run(*_args):
+        with lock:
+            state["now"] += 1
+            state["peak"] = max(state["peak"], state["now"])
+        time.sleep(0.2)
+        with lock:
+            state["now"] -= 1
+        return {"ok": True}
+
+    monkeypatch.setattr(main_mod, "_run_detection", fake_run)
+    with TestClient(app) as c:
+        name = c.get("/api/samples").json()[-1]["file"]
+        with ThreadPoolExecutor(3) as pool:
+            codes = list(pool.map(lambda _: c.post("/api/detect", data={"sample": name, "method": "hough"}).status_code, range(3)))
+        assert c.get("/api/health").status_code == 200
+    assert codes == [200, 200, 200]
+    assert state["peak"] == main_mod.MAX_PARALLEL_DETECTIONS

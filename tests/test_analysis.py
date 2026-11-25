@@ -48,3 +48,15 @@ def test_landing_sites_not_on_frame_edge():
     assert res["sites"]
     for s in res["sites"]:
         assert 8 <= s["x_px"] < 248 and 8 <= s["y_px"] < 248
+
+
+def test_dense_field_never_falls_back_to_edge_sites():
+    # Few clear interior spots and a large footprint: lower-ranked sites used to drop into the
+    # edge band (score capped at 0.2 but still above the 0.05 cut-off).
+    rng = np.random.default_rng(0)
+    img = rng.integers(0, 255, (200, 300)).astype(np.uint8)
+    craters = [{"x": float(rng.uniform(0, 300)), "y": float(rng.uniform(0, 200)), "r": float(rng.uniform(3, 25))} for _ in range(int(rng.integers(5, 60)))]
+    res = landing_safety(img, craters, mpp=1.0, footprint_m=40)
+    assert res["sites"]
+    for s in res["sites"]:
+        assert 40 <= s["x_px"] < 260 and 40 <= s["y_px"] < 160, s

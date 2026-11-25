@@ -10,6 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import anyio
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
@@ -26,6 +27,20 @@ MODELS = ROOT / "models"
 MAX_UPLOAD_BYTES = 40 * 1024 * 1024
 
 log = logging.getLogger("uvicorn.error")
+
+# Run one detection at a time. A 2048 px U-Net run already uses every CPU core and about 0.9 GB of
+# RAM, so parallel runs are not faster and several large uploads at once could exhaust memory.
+# Queued requests wait on this limiter without holding a worker thread, so /api/health and the
+# static files stay responsive. Created lazily inside the event loop (needed on anyio 3.x).
+MAX_PARALLEL_DETECTIONS = 1
+_detect_limiter: anyio.CapacityLimiter | None = None
+
+
+def _get_detect_limiter() -> anyio.CapacityLimiter:
+    global _detect_limiter
+    if _detect_limiter is None:
+        _detect_limiter = anyio.CapacityLimiter(MAX_PARALLEL_DETECTIONS)
+    return _detect_limiter
 
 
 @asynccontextmanager
@@ -122,8 +137,9 @@ async def detect(
 
     # Inference and analysis are CPU-bound: run them in a worker thread so the event loop
     # (health checks, static files, other requests) is not blocked for seconds.
-    return await run_in_threadpool(
-        _run_detection, img, source, ground_truth, method, meters_per_pixel, min_confidence, lander_footprint_m
+    return await anyio.to_thread.run_sync(
+        _run_detection, img, source, ground_truth, method, meters_per_pixel, min_confidence, lander_footprint_m,
+        limiter=_get_detect_limiter(),
     )
 
 

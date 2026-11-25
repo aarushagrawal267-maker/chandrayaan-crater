@@ -118,6 +118,7 @@ def landing_safety(
 
     sites = []
     work = score.copy()
+    work[edge] = 0.0  # the cap above only shades the map; edge pixels must never become sites
     sep = max(int(round(footprint_m / mpp * 2)), min(h, w) // 8, 4)
     for _ in range(n_sites):
         idx = int(np.argmax(work))
