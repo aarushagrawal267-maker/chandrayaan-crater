@@ -36,3 +36,12 @@ def test_prepare_script_tiles_pds4(tmp_path):
     assert r.returncode == 0, r.stderr
     meta = json.loads((out / "tiles.json").read_text())
     assert meta["meters_per_pixel"] == 0.5 and len(meta["tiles"]) == 2  # 150x200 -> 128x128 + 128x72 tiles; 22-row strip skipped
+
+
+def test_cli_detect_broken_model(tmp_path, capsys):
+    img = tmp_path / "moon.png"
+    cv2.imwrite(str(img), generate_scene(128, seed=3).image)
+    bad = tmp_path / "bad.pt"
+    bad.write_text("not a model")
+    assert main(["detect", str(img), "--model", str(bad)]) == 2
+    assert "could not be loaded" in capsys.readouterr().err

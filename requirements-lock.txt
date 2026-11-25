@@ -1,0 +1,17 @@
+# Exact versions used to re-run the test suite and reproduce models/metrics.json
+# (Python 3.13, Linux, CPU). Needs Python 3.12+. For a normal install use requirements.txt;
+# use this file when you want the same numbers as the shipped evaluation:
+#   pip install -r requirements-lock.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0
+numpy==2.5.5
+opencv-python-headless==5.1.0.95
+fastapi==0.165.0
+starlette==1.10.0
+pydantic==2.14.4
+uvicorn[standard]==0.54.0
+python-multipart==0.0.34
+
+# tests
+pytest==9.2.0
+httpx==0.28.1

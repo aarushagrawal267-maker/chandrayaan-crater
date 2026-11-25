@@ -93,7 +93,7 @@ def train(
     model = CraterUNet(base=base)
     prior_history: list[dict] = []
     if init_from:
-        ckpt = torch.load(init_from, map_location="cpu", weights_only=False)
+        ckpt = torch.load(init_from, map_location="cpu", weights_only=True)
         model = CraterUNet(base=ckpt.get("base", base), depth=ckpt.get("depth", 4))
         model.load_state_dict(ckpt["state_dict"])
         prior_history = list(ckpt.get("extra", {}).get("history", []))

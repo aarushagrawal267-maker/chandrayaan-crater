@@ -5,10 +5,13 @@ Run:  uvicorn app.main:app --port 8000   then open http://localhost:8000
 from __future__ import annotations
 
 import json
+import logging
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -22,7 +25,23 @@ SAMPLES = ROOT / "samples"
 MODELS = ROOT / "models"
 MAX_UPLOAD_BYTES = 40 * 1024 * 1024
 
-app = FastAPI(title="Chandrayaan Crater Lens", version=__version__, description="Lunar crater detection and analysis API")
+log = logging.getLogger("uvicorn.error")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Load the U-Net once at start-up so a missing or broken model file is reported
+    # immediately (and by /api/health) instead of failing the first detection request.
+    det = get_detector()
+    error = await run_in_threadpool(det.load)
+    if error is None:
+        log.info("U-Net model loaded from %s", det.model_path)
+    else:
+        log.warning("U-Net model unavailable, only the 'hough' method will work. %s", error)
+    yield
+
+
+app = FastAPI(title="Chandrayaan Crater Lens", version=__version__, description="Lunar crater detection and analysis API", lifespan=lifespan)
 
 
 def _sample_index() -> list[dict]:
@@ -35,7 +54,7 @@ def _sample_index() -> list[dict]:
 @app.get("/api/health")
 def health():
     det = get_detector()
-    return {"status": "ok", "version": __version__, "model_available": det.model_available, "methods": list(METHODS)}
+    return {"status": "ok", "version": __version__, "model_available": det.model_available, "model_error": det.load_error, "methods": list(METHODS)}
 
 
 @app.get("/api/samples")
@@ -87,7 +106,7 @@ async def detect(
             data = await file.read(MAX_UPLOAD_BYTES + 1)
             if len(data) > MAX_UPLOAD_BYTES:
                 raise HTTPException(413, "File too large (max 40 MB). Crop or downsample it first, e.g. with scripts/prepare_chandrayaan.py")
-            img = decode_image_bytes(data)
+            img = await run_in_threadpool(decode_image_bytes, data)
             source = file.filename
         elif sample:
             idx = {s["file"]: s for s in _sample_index()}
@@ -101,6 +120,14 @@ async def detect(
     except ImageLoadError as exc:
         raise HTTPException(422, str(exc)) from exc
 
+    # Inference and analysis are CPU-bound: run them in a worker thread so the event loop
+    # (health checks, static files, other requests) is not blocked for seconds.
+    return await run_in_threadpool(
+        _run_detection, img, source, ground_truth, method, meters_per_pixel, min_confidence, lander_footprint_m
+    )
+
+
+def _run_detection(img, source, ground_truth, method, meters_per_pixel, min_confidence, lander_footprint_m):
     img, scale = limit_size(img)
     mpp = meters_per_pixel / scale
     if ground_truth is not None and scale != 1.0:
@@ -111,7 +138,7 @@ async def detect(
         craters, _ = get_detector().detect(img, method=method, min_confidence=min_confidence)
     except ModelUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc
-    except ValueError as exc:
+    except ValueError as exc:  # e.g. image smaller than 32x32 px
         raise HTTPException(422, str(exc)) from exc
     detect_ms = (time.perf_counter() - t0) * 1000
 

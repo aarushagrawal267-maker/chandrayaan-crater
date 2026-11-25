@@ -29,8 +29,11 @@ def radius_grid(r_min: float, r_max: float, step: float = 1.07) -> list[float]:
     return radii
 
 
-def ring_support(prob: np.ndarray, x: float, y: float, r: float, n: int = 72) -> float:
-    """Mean rim probability sampled around the circle (inside the image only)."""
+def ring_support(prob: np.ndarray, x: float, y: float, r: float, n: int = 72, dilated: np.ndarray | None = None) -> float:
+    """Mean rim probability sampled around the circle (inside the image only).
+
+    ``dilated`` is ``prob`` after a 3x3 dilation; pass it when scoring many circles so the
+    dilation is computed once rather than once per circle."""
     ang = np.linspace(0, 2 * np.pi, n, endpoint=False)
     xs = np.round(x + r * np.cos(ang)).astype(int)
     ys = np.round(y + r * np.sin(ang)).astype(int)
@@ -39,23 +42,24 @@ def ring_support(prob: np.ndarray, x: float, y: float, r: float, n: int = 72) ->
     if ok.sum() < n * 0.4:
         return 0.0
     # allow +-1 px tolerance: take the max in a 3x3 neighbourhood
-    dil = cv2.dilate(prob, np.ones((3, 3), np.uint8))
+    dil = dilated if dilated is not None else cv2.dilate(prob, np.ones((3, 3), np.uint8))
     return float(dil[ys[ok], xs[ok]].mean())
 
 
 def nms_circles(cands: list[tuple[float, float, float, float]], dist_frac: float = 0.6, rad_frac: float = 0.45):
     """Greedy suppression; ``cands`` are (x, y, r, score). Higher scores win."""
     kept: list[tuple[float, float, float, float]] = []
+    kxyr = np.empty((len(cands), 3))  # kept circles as an array: vectorised overlap test
     for c in sorted(cands, key=lambda t: -t[3]):
         x, y, r, _ = c
-        dup = False
-        for kx, ky, kr, _ in kept:
-            rm = min(r, kr)
-            if (x - kx) ** 2 + (y - ky) ** 2 < (dist_frac * rm) ** 2 and abs(r - kr) / rm < rad_frac:
-                dup = True
-                break
-        if not dup:
-            kept.append(c)
+        m = len(kept)
+        if m:
+            kx, ky, kr = kxyr[:m, 0], kxyr[:m, 1], kxyr[:m, 2]
+            rm = np.minimum(r, kr)
+            if np.any(((x - kx) ** 2 + (y - ky) ** 2 < (dist_frac * rm) ** 2) & (np.abs(r - kr) / rm < rad_frac)):
+                continue
+        kxyr[m] = (x, y, r)
+        kept.append(c)
     return kept
 
 
@@ -85,8 +89,9 @@ def extract_craters(
             if 0 <= x < w and 0 <= y < h:
                 cands.append((float(x), float(y), float(r), float(res[y, x])))
     out = []
+    dilated = cv2.dilate(prob, np.ones((3, 3), np.uint8))
     for x, y, r, score in nms_circles(cands):
-        support = ring_support(prob, x, y, r)
+        support = ring_support(prob, x, y, r, dilated=dilated)
         if support >= min_support:
             out.append({"x": x, "y": y, "r": r, "match": round(score, 4), "confidence": round(support, 4)})
     # second pass NMS on confidence to drop concentric duplicates kept by score ordering

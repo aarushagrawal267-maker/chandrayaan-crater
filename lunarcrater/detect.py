@@ -43,25 +43,46 @@ class CraterDetector:
         self.device = device
         self._model = None
         self.model_info: dict = {}
+        self.load_error: str | None = None  # set when the model file exists but cannot be loaded
         self._lock = threading.Lock()
 
     # ----------------------------------------------------------------- model
     @property
     def model_available(self) -> bool:
-        return self.model_path.exists()
+        """True when the model file exists and has not failed to load."""
+        return self.model_path.exists() and self.load_error is None
+
+    def load(self) -> str | None:
+        """Load the U-Net now (e.g. at app start-up). Returns None on success, else the error message."""
+        try:
+            self._get_model()
+        except ModelUnavailable as exc:
+            return str(exc)
+        return None
 
     def _get_model(self):
         if self._model is None:
             with self._lock:
                 if self._model is None:
-                    if not self.model_available:
+                    if self.load_error:
+                        raise ModelUnavailable(self.load_error)
+                    if not self.model_path.exists():
                         raise ModelUnavailable(
-                            f"No trained model at {self.model_path}. Run `python -m lunarcrater.cli train` "
+                            f"No trained model at {self.model_path}. Restore the shipped file "
+                            "(git checkout -- models/crater_unet.pt), train one with `python -m lunarcrater train`, "
                             "or use the 'hough' method."
                         )
                     from .model import load_model
 
-                    self._model, self.model_info = load_model(self.model_path, self.device)
+                    try:
+                        self._model, self.model_info = load_model(self.model_path, self.device)
+                    except Exception as exc:  # corrupt / truncated / wrong file (e.g. a Git LFS pointer)
+                        self.load_error = (
+                            f"The model file {self.model_path} could not be loaded ({type(exc).__name__}: {exc}). "
+                            "It is probably incomplete or corrupt: download or restore it again, retrain with "
+                            "`python -m lunarcrater train`, or use the 'hough' method."
+                        )
+                        raise ModelUnavailable(self.load_error) from exc
         return self._model
 
     def predict_prob(self, img: np.ndarray) -> np.ndarray:

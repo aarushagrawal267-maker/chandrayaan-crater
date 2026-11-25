@@ -14,7 +14,7 @@ from pathlib import Path
 
 import cv2
 
-from .detect import ROOT, CraterDetector
+from .detect import ROOT, CraterDetector, ModelUnavailable
 
 SAMPLES_DIR = ROOT / "samples"
 
@@ -123,7 +123,11 @@ def main(argv: list[str] | None = None) -> int:
         img, scale = limit_size(img)
         mpp = args.mpp / scale
         det = CraterDetector(args.model)
-        craters, _ = det.detect(img, method=args.method, min_confidence=args.min_confidence)
+        try:
+            craters, _ = det.detect(img, method=args.method, min_confidence=args.min_confidence)
+        except (ModelUnavailable, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
         result = analyse(img, craters, mpp, footprint_m=args.footprint)
         s = result["stats"]
         print(f"{s['count']} craters | density {s['density_per_km2']} /km^2 | coverage {s['coverage_percent']}% | SFD slope {result['sfd']['slope']}")

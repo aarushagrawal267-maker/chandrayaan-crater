@@ -16,6 +16,7 @@ async function init() {
   try {
     const h = await (await fetch("/api/health")).json();
     const pill = $("#status");
+    pill.title = h.model_error || "";
     if (h.model_available) { pill.textContent = "U-Net model loaded"; pill.className = "pill ok"; }
     else {
       pill.textContent = "No model: Hough only"; pill.className = "pill warn";

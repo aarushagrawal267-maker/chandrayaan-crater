@@ -75,7 +75,10 @@ def save_model(model: CraterUNet, path, extra: dict | None = None) -> None:
 
 
 def load_model(path, device: str = "cpu") -> tuple[CraterUNet, dict]:
-    ckpt = torch.load(path, map_location=device, weights_only=False)
+    # weights_only: a checkpoint holds only tensors and plain values, so never unpickle code from it
+    ckpt = torch.load(path, map_location=device, weights_only=True)
+    if not isinstance(ckpt, dict) or "state_dict" not in ckpt:
+        raise ValueError(f"{path} is not a CraterUNet checkpoint (no 'state_dict')")
     model = CraterUNet(base=ckpt.get("base", 16), depth=ckpt.get("depth", 4))
     model.load_state_dict(ckpt["state_dict"])
     model.eval().to(device)

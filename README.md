@@ -87,6 +87,9 @@ pip install -r requirements.txt
 uvicorn app.main:app --port 8000
 ```
 
+`requirements.txt` takes the newest compatible packages. To get the exact versions the evaluation in
+`models/metrics.json` was last reproduced with (Python 3.12+), install `requirements-lock.txt` instead.
+
 **Docker (optional)**. The Dockerfile follows the manual steps above. It was written without a Docker daemon available, so it has not been test-built yet.
 
 ```bash
@@ -246,7 +249,7 @@ Interactive documentation is at **http://localhost:8000/docs** while the server 
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/health` | status, version, whether the U-Net model is available |
+| GET | `/api/health` | status, version, whether the U-Net model loaded (the model is loaded once at start-up; `model_error` explains a missing or corrupt model file) |
 | GET | `/api/samples` | list of demo images (`/api/samples/{file}` returns the PNG) |
 | POST | `/api/detect` | multipart form: `file` **or** `sample`, `method`, `meters_per_pixel`, `min_confidence`, `lander_footprint_m`. Returns the catalogue, stats, SFD, landing sites and PNG overlays (base64) |
 | GET | `/api/model` | evaluation report and training history |
@@ -265,10 +268,10 @@ python -m pytest
 
 The same suite runs automatically on GitHub Actions for every push (`.github/workflows/tests.yml`).
 
-The suite has 45 tests. They cover the simulator, a one-epoch training and fine-tuning run, ring extraction, the matching metrics, the image loaders
+The suite has 51 tests. They cover the simulator, a one-epoch training and fine-tuning run, the train/validation/test seed split, ring extraction, the matching metrics, the image loaders
 (including PDS4), the analysis maths, the detector (an untrained model for shape and tiling checks, plus a
 regression check that the shipped weights reach F1 > 0.5 on held-out scenes), every API endpoint and its error
-cases, the CLI, and the tiling script.
+cases (including a corrupt model file, which gives a clear 503 instead of a crash), the CLI, and the tiling script.
 
 ---
 
@@ -298,7 +301,7 @@ chandrayaan-crater/
 ├── docs/screenshots/
 ├── start.sh / start.ps1     one-command setup + launch
 ├── Dockerfile
-└── requirements.txt
+└── requirements.txt / requirements-lock.txt   (lock = exact tested versions)
 ```
 
 ---

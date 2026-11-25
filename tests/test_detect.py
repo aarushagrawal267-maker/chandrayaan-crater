@@ -44,3 +44,23 @@ def test_trained_model_finds_craters(trained_detector):
         res.append(match_craters(pred, sc.craters))
     s = summarize(res)
     assert s["f1"] > 0.5, s
+
+
+def test_corrupt_model_file_gives_clear_error(tmp_path):
+    bad = tmp_path / "crater_unet.pt"
+    bad.write_text("version https://git-lfs.github.com/spec/v1\n")  # e.g. an LFS pointer, not weights
+    det = CraterDetector(bad)
+    assert det.model_available  # file exists, not yet tried
+    err = det.load()
+    assert err and "could not be loaded" in err and "hough" in err
+    assert not det.model_available and det.load_error == err
+    img = generate_scene(128, seed=2).image
+    with pytest.raises(ModelUnavailable, match="could not be loaded"):
+        det.detect(img, method="unet")
+    craters, _ = det.detect(img, method="hough")  # the baseline keeps working
+    assert isinstance(craters, list)
+
+
+def test_load_reports_success(random_model_path):
+    det = CraterDetector(random_model_path)
+    assert det.load() is None and det.model_available and det.load_error is None

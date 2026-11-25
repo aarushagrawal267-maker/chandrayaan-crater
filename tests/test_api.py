@@ -76,3 +76,30 @@ def test_detect_errors(kwargs, code):
 def test_model_endpoint():
     d = client.get("/api/model").json()
     assert "model_available" in d and "evaluation" in d
+
+
+def test_model_loaded_at_startup():
+    import app.main as main_mod
+
+    with TestClient(app) as c:  # runs the lifespan start-up hook
+        h = c.get("/api/health").json()
+        if main_mod.get_detector().model_path.exists():
+            assert main_mod.get_detector()._model is not None
+            assert h["model_available"] and h["model_error"] is None
+
+
+def test_broken_model_reported_not_500(monkeypatch, tmp_path):
+    import app.main as main_mod
+    from lunarcrater.detect import CraterDetector
+
+    bad = tmp_path / "broken.pt"
+    bad.write_bytes(b"\x00not a checkpoint")
+    det = CraterDetector(bad)
+    monkeypatch.setattr(main_mod, "get_detector", lambda: det)
+    with TestClient(app) as c:
+        h = c.get("/api/health").json()
+        assert h["model_available"] is False and "could not be loaded" in h["model_error"]
+        name = c.get("/api/samples").json()[-1]["file"]
+        r = c.post("/api/detect", data={"sample": name, "method": "unet"})
+        assert r.status_code == 503 and "could not be loaded" in r.json()["detail"]
+        assert c.post("/api/detect", data={"sample": name, "method": "hough"}).status_code == 200
