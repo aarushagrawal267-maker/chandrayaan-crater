@@ -18,3 +18,14 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Run tests
         run: python -m pytest
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # scan the full history, not just the latest commit
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

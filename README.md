@@ -120,6 +120,8 @@ were found.
 
 ISRO publishes Chandrayaan-2 data free of charge through the **PRADAN** portal of the Indian Space Science Data
 Centre. Registration is required, so this repository cannot download the data for you.
+Never put your PRADAN password, cookies or a `.netrc` file in this folder's tracked files; `.gitignore` already
+excludes `.env`, `.netrc`, `cookies.txt` and key files.
 
 1. Create an account at <https://pradan.issdc.gov.in> and open the Chandrayaan-2 section.
 2. Download a calibrated product from **TMC-2** (Terrain Mapping Camera 2, about 5 m/px) or **OHRC** (Orbiter High
@@ -296,7 +298,9 @@ curl -F file=@tile.png -F meters_per_pixel=5 http://localhost:8000/api/detect
 python -m pytest
 ```
 
-The same suite runs automatically on GitHub Actions for every push (`.github/workflows/tests.yml`).
+The same suite runs automatically on GitHub Actions for every push (`.github/workflows/tests.yml`). A second job
+runs [gitleaks](https://github.com/gitleaks/gitleaks) over the full Git history and fails if a password, API key
+or private key is ever committed.
 
 The suite has 55 tests. They cover the simulator, a one-epoch training and fine-tuning run, the train/validation/test seed split, ring extraction, the matching metrics and their bootstrap confidence intervals, the image loaders
 (including PDS4), the analysis maths, the detector (an untrained model for shape and tiling checks, plus a

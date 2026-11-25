@@ -1,6 +1,7 @@
 # Python
 .venv/
 venv/
+env/
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -13,13 +14,36 @@ data/
 *.IMG
 *.tif
 *.tiff
+*.zip
+*.tar
+*.tar.gz
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+*.dump
 
 # Model checkpoints: only the shipped model is tracked
 models/*.pt
 !models/crater_unet.pt
 
-# Runtime / secrets
+# Node (Playwright screenshot tooling, if ever added)
+node_modules/
+
+# Runtime / secrets (PRADAN logins, API keys, cookies): never commit
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+.netrc
+_netrc
+cookies.txt
+credentials*.json
 *.log
 .DS_Store
 Thumbs.db
