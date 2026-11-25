@@ -149,6 +149,8 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
   #tab-analyse.active { grid-template-columns: 1fr; }
   .controls { position: static; }
   .grid2 { grid-template-columns: 1fr; }
+  .topbar { position: static; padding: 10px 16px; gap: 8px 16px; }
   .tabs { margin-left: 0; }
+  .tab { padding: 6px 10px; white-space: nowrap; }
   main { padding: 16px; }
 }
