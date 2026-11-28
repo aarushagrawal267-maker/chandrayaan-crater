@@ -69,7 +69,7 @@
   engineReady
     .then(() => setStatus("Ready: everything runs on this device."))
     .catch((e) => { console.warn(e); setStatus("The in-browser engine could not load (" + e.message + "). Try reloading, or run the full app locally.", true); });
-  setStatus("Loading the in-browser engine (about 40 MB on the first visit)…");
+  setStatus("Loading the in-browser engine (about 30 MB on the first visit)…");
 
   const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 

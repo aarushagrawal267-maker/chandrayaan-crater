@@ -111,7 +111,7 @@ no server. It serves the normal web UI, and a small script (`deploy/browser/brow
   run by [Pyodide](https://pyodide.org/) (`deploy/browser/web_api.py` mirrors `POST /api/detect`).
 
 Differences from the full app: images are analysed at up to 1024 px (2048 px locally), the first visit downloads
-about 40 MB (Python runtime, NumPy, OpenCV and the model), and there is no training or evaluation. When the demo is
+about 30 MB (Python runtime, NumPy, OpenCV and the model), and there is no training or evaluation. When the demo is
 built, the ONNX model is compared with PyTorch on every tile the detector produces for the four samples (largest
 difference 3e-6 in rim probability; identical crater lists), and `tests/test_browser_demo.py` checks that the demo's
 request handling gives the same result as the API. Rebuild and publish it with:
