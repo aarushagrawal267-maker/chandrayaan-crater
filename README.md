@@ -2,6 +2,9 @@
 
 **Automatic lunar crater detection, crater statistics and landing-site screening for Chandrayaan-2 style orbital images. It runs on an ordinary laptop with no GPU.**
 
+**Live demo:** https://huggingface.co/spaces/agrawalaarush08/chandrayaan-crater-lens (browser demo: the same U-Net
+and analysis code run in your browser; the full app runs locally, see [Browser demo](#browser-demo))
+
 Upload a lunar image (or pick a built-in sample). A small U-Net neural network marks crater rims and every crater is
 converted into a circle with a position, a diameter in metres and a confidence. The app then reports crater density,
 the area covered by craters and the size-frequency distribution, and it suggests the flattest crater-free spots for
@@ -95,6 +98,27 @@ uvicorn app.main:app --port 8000
 ```bash
 docker build -t crater-lens .
 docker run -p 8000:8000 crater-lens
+```
+
+### Browser demo
+
+The [live demo](https://huggingface.co/spaces/agrawalaarush08/chandrayaan-crater-lens) is a static page that needs
+no server. It serves the normal web UI, and a small script (`deploy/browser/browser-api.js`) answers the UI's
+`/api/*` requests inside the browser:
+
+* the U-Net runs as an ONNX export of `models/crater_unet.pt` in [onnxruntime-web](https://onnxruntime.ai/);
+* tiling, ring extraction, merging, statistics and landing-site screening are the same `lunarcrater` Python code,
+  run by [Pyodide](https://pyodide.org/) (`deploy/browser/web_api.py` mirrors `POST /api/detect`).
+
+Differences from the full app: images are analysed at up to 1024 px (2048 px locally), the first visit downloads
+about 40 MB (Python runtime, NumPy, OpenCV and the model), and there is no training or evaluation. When the demo is
+built, the ONNX model is compared with PyTorch on every tile the detector produces for the four samples (largest
+difference 3e-6 in rim probability; identical crater lists), and `tests/test_browser_demo.py` checks that the demo's
+request handling gives the same result as the API. Rebuild and publish it with:
+
+```bash
+pip install onnx onnxruntime huggingface_hub
+python deploy/browser/build.py --out build/browser-demo [--space <hf-user>/chandrayaan-crater-lens]
 ```
 
 ---
@@ -303,10 +327,10 @@ The same suite runs automatically on GitHub Actions for every push (`.github/wor
 runs [gitleaks](https://github.com/gitleaks/gitleaks) over the full Git history and fails if a password, API key
 or private key is ever committed.
 
-The suite has 57 tests. They cover the simulator, a one-epoch training and fine-tuning run, the train/validation/test seed split, ring extraction, the matching metrics and their bootstrap confidence intervals, the image loaders
+The suite has 61 tests. They cover the simulator, a one-epoch training and fine-tuning run, the train/validation/test seed split, ring extraction, the matching metrics and their bootstrap confidence intervals, the image loaders
 (including PDS4), the analysis maths, the detector (an untrained model for shape and tiling checks, plus a
 regression check that the shipped weights reach F1 > 0.5 on held-out scenes), every API endpoint and its error
-cases (including a corrupt model file, which gives a clear 503 instead of a crash, and parallel requests, which are queued), the CLI, and the tiling script.
+cases (including a corrupt model file, which gives a clear 503 instead of a crash, and parallel requests, which are queued), the CLI, the tiling script, and the browser demo's request handling (same results as the API).
 
 ---
 
@@ -333,6 +357,7 @@ chandrayaan-crater/
 ├── samples/                 4 simulated demo images + ground truth (samples.json)
 ├── scripts/prepare_chandrayaan.py   tile real PRADAN products
 ├── tests/                   pytest suite
+├── deploy/browser/          static browser demo (ONNX + Pyodide) and its build script
 ├── docs/screenshots/
 ├── start.sh / start.ps1     one-command setup + launch
 ├── Dockerfile
