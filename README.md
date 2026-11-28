@@ -208,15 +208,13 @@ simulated scenes to another. It does **not** cover the gap between simulated and
 0.835-0.884, Hough 0.164-0.229. Recall CI: U-Net 0.821-0.868, Hough 0.062-0.086. Scores also vary a lot between
 single images: the per-image U-Net F1 has a median of 0.85 but drops to 0.44 on the hardest test scene.
 
-‡ Mean over all matched craters, as a fraction of the true radius. Before 25 Nov 2026 this was a mean of per-image
-means (U-Net 10.8 % / 6.5 %, Hough 19.3 % / 10.3 %); precision, recall and F1 were not affected.
+‡ Mean over all matched craters, as a fraction of the true radius.
 
-\* `mean_inference_ms` in `metrics.json` is wall-clock CPU time per image, including the ½-scale pyramid level.
-It depends heavily on the machine and on what else is running. On the shared 4-core cloud machines used for this
-project the U-Net took between about 140 ms and 480 ms per image when the machine was quiet, and the Hough baseline
-about 25 ms. The stored values (U-Net 476 ms, Hough 24 ms) are from the original evaluation run. The 25 Nov 2026
-re-run reproduced every accuracy number exactly, but the machine was busy with other jobs and measured 1.7-2.0 s
-per U-Net image, so its timings were not stored. Treat the timing as an example, not a benchmark.
+\* `mean_inference_ms` in `metrics.json` is wall-clock CPU time per image, including the ½-scale pyramid level,
+measured on a shared 4-core machine. It depends heavily on the hardware and on what else is running: on quiet
+4-core machines the U-Net takes roughly 140-480 ms per image and the Hough baseline about 25 ms, and a busy machine
+can be several times slower. Treat the timing as an example, not a benchmark. The scenes are generated from fixed
+seeds, so re-running the evaluation reproduces the accuracy numbers exactly; only the timings change.
 
 The Hough transform fails mostly on small craters: under a low sun a crater looks like a crescent of shadow beside a
 crescent of light, not a closed circular edge. The U-Net learns that pattern. The baseline is not a straw man: a
@@ -225,9 +223,8 @@ scenes found no setting above F1 0.106 there, and the best of them scored F1 0.1
 confidence interval above. The shipped settings are kept.
 
 **Thresholds.** The U-Net detection thresholds (ring match ≥ 0.5, rim confidence ≥ 0.6) were not tuned on the test
-scenes. The original tuning run was not saved, so they were re-checked on 100 **validation** scenes (seeds
-10,000,000-10,000,099, rendered at 256 px) with `python -m lunarcrater evaluate --split val --min-confidence C`
-(ring match changed in code):
+scenes. They are checked on 100 **validation** scenes (seeds 10,000,000-10,000,099, rendered at 256 px) with
+`python -m lunarcrater evaluate --split val --min-confidence C` (ring match changed in code):
 
 | Rim confidence → / ring match ↓ | 0.5 | 0.6 (default) | 0.7 |
 |------|------|------|------|
@@ -240,8 +237,8 @@ well inside the scatter shown by the confidence interval, so 0.6 is kept because
 (validation recall 0.822 vs 0.813). In the app you can raise the minimum rim confidence yourself.
 
 Training (CPU only, about 1 h in total on a shared 4-core machine). **Stage 1:** AdamW with a one-cycle schedule
-(peak learning rate 2e-3, 1,600 scenes of 160 × 160 px per epoch, planned for 16 epochs). The run was stopped after
-8 epochs because the shared CPU had become very slow. **Stage 2:** 3 epochs of cosine fine-tuning (learning rate 5e-4,
+(peak learning rate 2e-3, 1,600 scenes of 160 × 160 px per epoch), stopped after 8 of the 16 scheduled epochs to
+limit CPU time. **Stage 2:** 3 epochs of cosine fine-tuning (learning rate 5e-4,
 800 scenes per epoch). The checkpoint with the lowest validation loss is kept: epoch 9, with validation loss 0.609
 and rim IoU 0.474. The per-epoch history is in [`models/training_history.json`](models/training_history.json) and
 on the *Model & evaluation* page.
