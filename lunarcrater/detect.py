@@ -85,19 +85,40 @@ class CraterDetector:
                         raise ModelUnavailable(self.load_error) from exc
         return self._model
 
-    def predict_prob(self, img: np.ndarray) -> np.ndarray:
-        """Rim probability for an image of any size (tiled inference with overlap)."""
+    # ------------------------------------------------------------- inference
+    # Detection is written as generators ("*_steps") that yield batches of standardised tiles and receive the
+    # rim probabilities back. The normal methods answer them with the PyTorch model (``_infer``); the browser demo
+    # answers the same generators with an ONNX export of the model, so both run identical pre- and post-processing.
+    def _infer(self, batch: np.ndarray) -> np.ndarray:
+        """Rim probabilities (sigmoid) for a float32 batch of standardised tiles, shape (N, H, W)."""
         import torch
 
         model = self._get_model()
+        with torch.no_grad():
+            out = torch.sigmoid(model(torch.from_numpy(batch)[:, None].to(self.device)))
+        return out[:, 0].cpu().numpy()
+
+    def run_steps(self, steps):
+        """Run a ``*_steps`` generator to completion, answering every batch with ``_infer``."""
+        try:
+            batch = next(steps)
+            while True:
+                batch = steps.send(self._infer(batch))
+        except StopIteration as stop:
+            return stop.value
+
+    def predict_prob(self, img: np.ndarray) -> np.ndarray:
+        """Rim probability for an image of any size (tiled inference with overlap)."""
+        return self.run_steps(self.predict_prob_steps(img))
+
+    def predict_prob_steps(self, img: np.ndarray):
         h, w = img.shape
         stride = 16
         if h <= TILE and w <= TILE:
             ph, pw = -(-h // stride) * stride, -(-w // stride) * stride
             x = np.pad(standardize(img), ((0, ph - h), (0, pw - w)), mode="reflect")
-            with torch.no_grad():
-                logits = model(torch.from_numpy(x)[None, None].to(self.device))
-            return torch.sigmoid(logits)[0, 0, :h, :w].cpu().numpy()
+            out = yield x[None]
+            return out[0, :h, :w]
 
         prob = np.zeros((h, w), np.float32)
         weight = np.zeros((h, w), np.float32)
@@ -108,11 +129,7 @@ class CraterDetector:
         norm_img = img  # standardise each tile separately: robust to illumination gradients
         batch, coords = [], []
 
-        def flush():
-            if not batch:
-                return
-            with torch.no_grad():
-                out = torch.sigmoid(model(torch.from_numpy(np.stack(batch))[:, None].to(self.device)))[:, 0].cpu().numpy()
+        def add(out):
             for (yy, xx, th, tw), p in zip(coords, out):
                 prob[yy : yy + th, xx : xx + tw] += p[:th, :tw] * win[:th, :tw]
                 weight[yy : yy + th, xx : xx + tw] += win[:th, :tw]
@@ -129,13 +146,17 @@ class CraterDetector:
                 batch.append(t)
                 coords.append((y, x, th, tw))
                 if len(batch) == 8:
-                    flush()
-        flush()
+                    add((yield np.stack(batch)))
+        if batch:
+            add((yield np.stack(batch)))
         return prob / np.maximum(weight, 1e-6)
 
     # ---------------------------------------------------------------- detect
     def detect(self, img: np.ndarray, method: str = "unet", min_confidence: float = 0.6) -> tuple[list[dict], np.ndarray | None]:
         """Return (craters, probability map or None). Crater coordinates are in pixels of ``img``."""
+        return self.run_steps(self.detect_steps(img, method, min_confidence))
+
+    def detect_steps(self, img: np.ndarray, method: str = "unet", min_confidence: float = 0.6):
         if method not in METHODS:
             raise ValueError(f"Unknown method {method!r}; choose one of {METHODS}")
         if img.ndim != 2 or img.dtype != np.uint8:
@@ -158,7 +179,7 @@ class CraterDetector:
                 im = img
             else:
                 im = cv2.resize(img, (max(32, round(w * scale)), max(32, round(h * scale))), interpolation=cv2.INTER_AREA)
-            prob = self.predict_prob(im)
+            prob = yield from self.predict_prob_steps(im)
             if prob_full is None:
                 prob_full = prob
             r_max = min(R_MAX, min(im.shape) / 3.0)

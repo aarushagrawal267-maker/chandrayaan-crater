@@ -50,3 +50,6 @@ Thumbs.db
 models/metrics_val.json
 # Ad-hoc evaluation reports (python -m lunarcrater evaluate without --out)
 outputs/
+
+# Browser demo build output (deploy/browser/build.py)
+build/
