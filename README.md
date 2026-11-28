@@ -259,6 +259,10 @@ python -m lunarcrater train --init-from models/crater_unet.pt --out models/crate
 python -m lunarcrater evaluate --images 100 --model models/crater_unet_ft.pt
 ```
 
+`evaluate` writes its report to `outputs/metrics_test.json` (or `outputs/metrics_val.json` with `--split val`),
+which Git ignores, so trying things out never changes the published numbers. Add `--out models/metrics.json` only
+when you mean to replace the report that the app and this README show.
+
 ---
 
 ## Command line
@@ -266,7 +270,7 @@ python -m lunarcrater evaluate --images 100 --model models/crater_unet_ft.pt
 ```bash
 python -m lunarcrater make-samples                     # regenerate samples/ (deterministic)
 python -m lunarcrater train [--epochs N --train-size N]
-python -m lunarcrater evaluate [--images N] [--split test|val] [--min-confidence 0.6]
+python -m lunarcrater evaluate [--images N] [--split test|val] [--min-confidence 0.6] [--out report.json]
 python -m lunarcrater detect IMAGE --mpp 5 [--method unet|hough] [--min-confidence 0.6]
                              [--footprint 10] [--csv out.csv] [--json out.json] [--annotated out.png]
 ```
@@ -302,7 +306,7 @@ The same suite runs automatically on GitHub Actions for every push (`.github/wor
 runs [gitleaks](https://github.com/gitleaks/gitleaks) over the full Git history and fails if a password, API key
 or private key is ever committed.
 
-The suite has 55 tests. They cover the simulator, a one-epoch training and fine-tuning run, the train/validation/test seed split, ring extraction, the matching metrics and their bootstrap confidence intervals, the image loaders
+The suite has 57 tests. They cover the simulator, a one-epoch training and fine-tuning run, the train/validation/test seed split, ring extraction, the matching metrics and their bootstrap confidence intervals, the image loaders
 (including PDS4), the analysis maths, the detector (an untrained model for shape and tiling checks, plus a
 regression check that the shipped weights reach F1 > 0.5 on held-out scenes), every API endpoint and its error
 cases (including a corrupt model file, which gives a clear 503 instead of a crash, and parallel requests, which are queued), the CLI, and the tiling script.

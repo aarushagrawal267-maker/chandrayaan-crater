@@ -94,4 +94,6 @@ def evaluate(
 
 
 def write_report(report: dict, path: str | Path) -> None:
-    Path(path).write_text(json.dumps(report, indent=2))
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2))

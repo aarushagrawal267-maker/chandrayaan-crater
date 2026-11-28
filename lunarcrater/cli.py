@@ -2,7 +2,7 @@
 
     python -m lunarcrater.cli make-samples          # regenerate the demo images in samples/
     python -m lunarcrater.cli train --epochs 16     # train the U-Net on synthetic scenes
-    python -m lunarcrater.cli evaluate              # score U-Net and Hough on held-out scenes
+    python -m lunarcrater.cli evaluate              # score U-Net and Hough on held-out scenes (-> outputs/)
     python -m lunarcrater.cli detect IMAGE --mpp 5  # detect craters in your own image
 """
 from __future__ import annotations
@@ -17,6 +17,13 @@ import cv2
 from .detect import ROOT, CraterDetector, ModelUnavailable
 
 SAMPLES_DIR = ROOT / "samples"
+# Ad-hoc evaluation reports go here (git-ignored). The committed report in models/metrics.json is
+# only replaced when it is asked for explicitly with --out models/metrics.json.
+EVAL_OUT_DIR = ROOT / "outputs"
+
+
+def default_eval_out(split: str) -> Path:
+    return EVAL_OUT_DIR / f"metrics_{split}.json"
 
 # Demo scenes: (file name, seed, size, metres/pixel, description)
 DEMO_SCENES = [
@@ -78,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--model", default=None)
     e.add_argument("--split", choices=["test", "val"], default="test", help="val = validation seeds, for choosing thresholds")
     e.add_argument("--min-confidence", type=float, default=0.6)
-    e.add_argument("--out", default=None, help="default: models/metrics.json (test) or models/metrics_val.json (val)")
+    e.add_argument("--out", default=None, help="report path (default: outputs/metrics_<split>.json; pass models/metrics.json to replace the published report)")
 
     d = sub.add_parser("detect", help="detect craters in an image (PNG/JPG/TIFF or PDS4 .xml label)")
     d.add_argument("image")
@@ -108,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "evaluate":
         from .evaluate import evaluate, write_report
 
-        out = args.out or str(ROOT / "models" / ("metrics.json" if args.split == "test" else "metrics_val.json"))
+        out = Path(args.out) if args.out else default_eval_out(args.split)
         rep = evaluate(n_images=args.images, detector=CraterDetector(args.model), split=args.split, min_confidence=args.min_confidence)
         write_report(rep, out)
         print(f"report written to {out}")

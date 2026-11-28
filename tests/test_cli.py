@@ -6,6 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from lunarcrater import cli
 from lunarcrater.cli import main
 from lunarcrater.synthetic import generate_scene
 
@@ -45,3 +46,22 @@ def test_cli_detect_broken_model(tmp_path, capsys):
     bad.write_text("not a model")
     assert main(["detect", str(img), "--model", str(bad)]) == 2
     assert "could not be loaded" in capsys.readouterr().err
+
+
+def test_cli_evaluate_default_does_not_touch_committed_report(tmp_path, monkeypatch, capsys):
+    committed = ROOT / "models" / "metrics.json"
+    before = committed.read_bytes()
+    monkeypatch.setattr(cli, "EVAL_OUT_DIR", tmp_path / "outputs")
+    assert main(["evaluate", "--images", "1"]) == 0
+    assert committed.read_bytes() == before
+    report = json.loads((tmp_path / "outputs" / "metrics_test.json").read_text())
+    assert report["test_set"]["images"] == 1 and "unet" in report["methods"]
+    assert "outputs" in capsys.readouterr().out
+
+
+def test_cli_evaluate_default_paths_are_not_committed_files():
+    for split in ("test", "val"):
+        p = cli.default_eval_out(split)
+        assert p.parent == cli.EVAL_OUT_DIR and p.parent.name == "outputs"
+        assert p != ROOT / "models" / "metrics.json"
+    assert "outputs/" in (ROOT / ".gitignore").read_text().splitlines()
